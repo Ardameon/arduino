@@ -104,6 +104,12 @@ void loop ()
     {
       sensor[i] = analogRead(sensor_led[i]);
 
+      if (i == 0)
+      {
+        Serial.print("sensor 0 = ");
+        Serial.println(sensor[i]);
+      }
+
       if (sensor[i] > 800)
       {
         strip[sensor_led_pos[i]] = 0x00FF00;
