@@ -49,7 +49,7 @@ void setup ()
 
   for (i = 0; i < STATES_CNT; i++)
   {
-    strip[states_led_pos[i]] = 0x000000 | (0xFF << ((i % 3) * 8));
+    strip[states_led_pos[i]] = 0x0000FF;
   }
   
   FastLED.show();
