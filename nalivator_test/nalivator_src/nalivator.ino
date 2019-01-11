@@ -28,7 +28,7 @@ int button;
 int prevCntA;
 
 int sensor[SENSORS_CNT];
-int sensor_led [] = {A1, A2, A3, A4, A5};
+int sensor_led [] = {A5, A4, A3, A2, A1};
 
 unsigned long currentTime;
 unsigned long loopTime;
@@ -104,7 +104,7 @@ void loop ()
     {
       sensor[i] = analogRead(sensor_led[i]);
 
-      if (sensor[i] > 100)
+      if (sensor[i] > 800)
       {
         strip[sensor_led_pos[i]] = 0x00FF00;
       } else {
