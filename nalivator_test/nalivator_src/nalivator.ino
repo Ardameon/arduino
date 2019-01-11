@@ -49,7 +49,7 @@ void setup ()
 
   for (i = 0; i < STATES_CNT; i++)
   {
-    strip[states_led_pos[i]] = 0xFF << ((i % 3) * 8);
+    strip[states_led_pos[i]] = 0x000000 | (0xFF << ((i % 3) * 8));
   }
   
   FastLED.show();
@@ -83,6 +83,11 @@ void loop ()
         strip[i + STATES_CNT] = 0xFF0000 | ((((int)(255 / MAX_VAL)) * value) << 8);
       }
 
+      for (; i < LED_COUNT; i++)
+      {
+        strip[i + STATES_CNT] = 0x000000;
+      }
+
       FastLED.show();
     }
 
@@ -99,11 +104,11 @@ void loop ()
     {
       sensor[i] = analogRead(sensor_led[i]);
 
-      if (sensor[i] < 100)
+      if (sensor[i] > 100)
       {
-        strip[i] = 0x00FF00;
+        strip[sensor_led_pos[i]] = 0x00FF00;
       } else {
-        strip[i] = 0x000000;
+        strip[sensor_led_pos[i]] = 0x000000;
       }
     }
 
