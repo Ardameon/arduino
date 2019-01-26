@@ -90,7 +90,7 @@ void set_state(nalivator_state_e st)
 {
   Serial.print(state_str(state));
   Serial.print(" => ");
-  Serial.print(state_str(st));
+  Serial.println(state_str(st));
   state = st;
 }
 
