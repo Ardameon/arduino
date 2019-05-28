@@ -1,6 +1,6 @@
 #include <FastLED.h>
-#include <OLED_I2C.h>
 #include <Servo.h>
+#include <OLED_I2C.h>
 
 
 #define SENSORS_CNT 5
@@ -23,7 +23,9 @@
 #define SERVO_PIN 5
 #define START_BUTTON 4 
 
-#define PUMP_OUTPUT 40 /* ml/s */ 
+#define RELEY_PIN 8
+
+#define PUMP_OUTPUT 18 /* ml/s */ 
 
 typedef enum {
   E_STATE_IDLE,
@@ -37,7 +39,7 @@ nalivator_state_e state;
 CRGB strip[LEDS_IN_STRIP];
 
 int sensor_led_pos[SENSORS_CNT] = {25, 24, 23, 22, 21};
-int states_led_pos[STATES_CNT]  = {5, 4, 3, 2, 1, 0};
+int states_led_pos[STATES_CNT]  = {0, 1, 2, 3, 4, 5};
 
 int cntA;
 int cntB;
@@ -47,7 +49,9 @@ int button_cur;
 int button_prev;
 
 int sensor[SENSORS_CNT];
-int sensor_led [] = {A5, A4, A3, A2, A1};
+// int sensor_led [] = {A1, A2, A3, A4, A5};
+int sensor_led [] = {9, 10, 11, 12, 13};
+
 
 unsigned char shotglass_checked[SENSORS_CNT];
 
@@ -57,14 +61,18 @@ unsigned long lastSensorCheckTime;
 
 unsigned long pumpWorkTime;
 
+unsigned long drunkCounter;
+int drunkCurrentPos;
+unsigned int drunk_treshold[STATES_CNT] = {50, 100, 150, 200, 250, 300};
+
 int value;
 
-OLED  myOLED(SDA, SCL);
-
 Servo myservo;
-int servo_shot_pos[] = {25, 45, 60, 75, 90};
-int servo_idle_pos   = 10;
-int servo_max_pos    = 92;
+int servo_shot_pos[] = {40, 70, 100, 130, 160};
+int servo_idle_pos   = 20;
+int servo_max_pos    = 170;
+
+OLED  myOLED(SDA, SCL);
 
 extern uint8_t RusFont[];//русский шрифт 
 extern uint8_t MediumNumbers[];//шрифт средних чисел
@@ -86,6 +94,24 @@ const char *state_str(nalivator_state_e st)
 
 /*================================================================================================*/
 
+void updateDisplay()
+{
+  char vod[] = "YFKBNM DJLZHS";
+  char ml[] = "vk";
+  
+  myOLED.clrScr();
+  myOLED.setFont(RusFont);
+//  myOLED.setFont(SmallFont);
+  myOLED.print(vod, CENTER, 5);
+  myOLED.setFont(BigNumbers);
+  myOLED.printNumI(value * 10, CENTER, 20);
+  myOLED.setFont(RusFont);
+  myOLED.print(ml, CENTER, 50);
+  myOLED.update();
+}
+
+/*================================================================================================*/
+
 void set_state(nalivator_state_e st)
 {
   Serial.print(state_str(state));
@@ -99,6 +125,7 @@ void set_state(nalivator_state_e st)
 void pump_start()
 {
   Serial.println("PUMP START");
+  digitalWrite(RELEY_PIN, 1);
 }
 
 /*================================================================================================*/
@@ -106,56 +133,65 @@ void pump_start()
 void pump_stop()
 {
   Serial.println("PUMP STOP");
+  digitalWrite(RELEY_PIN, 0);
 }
 
 /*================================================================================================*/
 
-void update_display_idle()
+void update_drunk_state()
 {
-  char text[] = "YFKBNM DJLZHS";
-  char ml[] = "vk";
-  
-  myOLED.clrScr();
-  myOLED.setFont(RusFont);
-  // myOLED.setFont(SmallFont);
-  myOLED.print(text, CENTER, 5);
-  myOLED.setFont(BigNumbers);
-  myOLED.printNumI(value * 10, CENTER, 20);
-  myOLED.setFont(RusFont);
-  // myOLED.setFont(SmallFont);
-  myOLED.print(ml, CENTER, 50);
-  myOLED.update();
+  int i;
+
+  for (i = 0; i < STATES_CNT; i++)
+  {
+    strip[i] = 0x000000;
+  }
+
+  drunkCounter += value * 10;
+
+  if (drunkCounter > drunk_treshold[STATES_CNT - 1])
+  {
+    for (i = 0; i < STATES_CNT; i++)
+    {
+      strip[i] = 0xFF0000;
+    }
+  } else {
+    for (i = STATES_CNT - 1; i >= 0; i--)
+    {
+      if (drunkCounter >= drunk_treshold[i])
+      {
+        strip[i] = 0x0000FF;
+        break;
+      }
+    }
+  }
 }
 
 /*================================================================================================*/
 
-void update_display_fill_shot(int shot_idx)
+
+/*================================================================================================*/
+
+int strip_leds_off()
 {
-  char text[] = "YFKBDFTV IJN";
-  
-  myOLED.clrScr();
-  myOLED.setFont(RusFont);
-  // myOLED.setFont(SmallFont);
-  myOLED.print(text, CENTER, 5);
-  myOLED.setFont(BigNumbers);
-  myOLED.printNumI(shot_idx, CENTER, 20);
-  myOLED.update();
+  int i;
+
+  for (i = STATES_CNT; i < LED_COUNT; i++)
+  {
+    strip[i] = 0x000000;
+  }
 }
 
 /*================================================================================================*/
 
-void update_display_finish()
+int strip_leds_on()
 {
-  char text[] = "DJPMVB <E{KBIRJ";
-  char text2[] = "(^-^)";
-  
-  myOLED.clrScr();
-  myOLED.setFont(RusFont);
-  // myOLED.setFont(SmallFont);
-  myOLED.print(text, CENTER, 5);
-  myOLED.setFont(SmallFont);
-  myOLED.print(text2, CENTER, 20);
-  myOLED.update();
+  int i;
+
+  for (i = 0; i < value; i++)
+  {
+    strip[i + STATES_CNT] = 0xFF0000 | ((((int)(255 / MAX_VAL)) * value) << 8);
+  }
 }
 
 /*================================================================================================*/
@@ -166,7 +202,16 @@ int start_button_pressed()
   
   button_cur = digitalRead(START_BUTTON);
 
+//  Serial.print("button_prev = ");
+ // Serial.print(button_prev);
+ // Serial.print(" button_cur = ");
+ // Serial.println(button_cur);
+
   if (button_prev && button_cur) res = 1;
+
+
+  Serial.print("res = ");
+  Serial.println(res);
 
   button_prev = button_cur;
 
@@ -175,7 +220,7 @@ int start_button_pressed()
 
 /*================================================================================================*/
 
-void setup ()
+void setup()
 {
   int i;
   
@@ -183,20 +228,33 @@ void setup ()
   pinMode(CNT_A, INPUT);
   pinMode(CNT_B, INPUT);
   pinMode(START_BUTTON, INPUT);
+  pinMode(RELEY_PIN, OUTPUT);
   FastLED.addLeds<NEOPIXEL, LED_PIN >(strip, LEDS_IN_STRIP);
   FastLED.setBrightness( BRIGHTNESS );
-  myOLED.begin();
 
-  for (i = 0; i < STATES_CNT; i++)
+  // for (i = 0; i < STATES_CNT; i++)
+  // {
+  //   strip[states_led_pos[i]] = 0x0000FF;
+  // }
+
+  for (i = 0; i < SENSORS_CNT; i++)
   {
-    strip[states_led_pos[i]] = 0x0000FF;
+    pinMode(sensor_led[i], INPUT);
   }
   
   FastLED.show();
 
-  update_display_idle();
-
   myservo.attach(SERVO_PIN);
+  myservo.write(servo_idle_pos);
+
+  digitalWrite(RELEY_PIN, 0);
+
+  delay(1000);
+
+  myOLED.begin();
+  updateDisplay();
+
+  myservo.detach();
 
   set_state(E_STATE_IDLE);
 }
@@ -223,10 +281,8 @@ void loop_idle()
         if (value < MAX_VAL) value++;
       }
 
-      Serial.print("val = ");
-      Serial.println(value);
-
-      update_display_idle();
+      //Serial.print("val = ");
+     // Serial.println(value);
 
       for (i = 0; i < value; i++)
       {
@@ -239,6 +295,8 @@ void loop_idle()
       }
 
       FastLED.show();
+
+      updateDisplay();
     }
 
     prevCntA = cntA;
@@ -257,13 +315,16 @@ void loop_idle()
           strip[sensor_led_pos[i]] = 0x000000;
       }
 
+      strip_leds_off();
+
       set_state(E_STATE_RUNNING);
 
     } else {
 
       for (i = 0; i < SENSORS_CNT; i++)
       {
-        sensor[i] = analogRead(sensor_led[i]);
+        // sensor[i] = analogRead(sensor_led[i]);
+        sensor[i] = digitalRead(sensor_led[i]);
 
         // if (i == 0)
         // {
@@ -271,7 +332,8 @@ void loop_idle()
         //   Serial.println(sensor[i]);
         // }
 
-        if (sensor[i] > SENSOR_TRESHOLD)
+        // if (!sensor[i] < SENSOR_TRESHOLD)
+        if (!sensor[i])
         {
           strip[sensor_led_pos[i]] = 0x00FF00;
           shotglass_checked[i] = 1;
@@ -292,18 +354,24 @@ void loop_idle()
 
 void fill_the_shot(int shot_idx, int pump_work_time)
 {
-  update_display_fill_shot(shot_idx);
-
+//  myservo.attach(SERVO_PIN);
   myservo.write(servo_shot_pos[shot_idx]);
+  
 
   strip[sensor_led_pos[shot_idx]] = 0x0000FF;
   FastLED.show();
+  
+  
+  delay(1300);
+//  myservo.detach();
 
   pump_start();
 
   delay(pump_work_time);
 
   pump_stop();
+
+  delay(2000);
 
   strip[sensor_led_pos[shot_idx]] = 0xFF0000;
   FastLED.show();
@@ -314,6 +382,8 @@ void fill_the_shot(int shot_idx, int pump_work_time)
 void loop_running()
 {
   int i, delay_val;
+
+  myservo.attach(SERVO_PIN);
 
   delay_val = (value * 10) / PUMP_OUTPUT * 1000;                  /* int value */
   delay_val += ((value * 10) % PUMP_OUTPUT) * 1000 / PUMP_OUTPUT; /* remainder */
@@ -331,11 +401,12 @@ void loop_running()
 
   myservo.write(servo_max_pos);
 
-  delay(100);
+  delay(700);
 
   myservo.write(servo_idle_pos);
 
-  delay(1000);
+  delay(1500);
+  myservo.detach();
 
   set_state(E_STATE_FINISH);
 }
@@ -361,16 +432,18 @@ void loop_finish()
 {
   int i;
 
-  update_display_finish();
+  update_drunk_state();
 
   while (any_shotglass_checked())
   {
     for (i = 0; i < SENSORS_CNT; i++)
     {
       {
-        sensor[i] = analogRead(sensor_led[i]);
+        // sensor[i] = analogRead(sensor_led[i]);
+        sensor[i] = digitalRead(sensor_led[i]);
 
-        if (sensor[i] < SENSOR_TRESHOLD)
+        // if (sensor[i] < SENSOR_TRESHOLD)
+        if (sensor[i])
         {
           strip[sensor_led_pos[i]] = 0x000000;
           shotglass_checked[i] = 0;
@@ -382,6 +455,9 @@ void loop_finish()
 
     delay(100);
   }
+
+  strip_leds_on();
+  FastLED.show();
 
   set_state(E_STATE_IDLE);
 }
@@ -397,15 +473,15 @@ void loop_cleaning()
 
 void loop ()
 {
-  switch (state)
-  {
-    case E_STATE_IDLE:     loop_idle();     break;
-    case E_STATE_RUNNING:  loop_running();  break;
-    case E_STATE_FINISH:   loop_finish();   break;
-    case E_STATE_CLEANING: loop_cleaning(); break;
-    default: Serial.println("ERROR. Wrong state!");
-  }
+ switch (state)
+ {
+ case E_STATE_IDLE: loop_idle(); break;
+ case E_STATE_RUNNING: loop_running(); break;
+ case E_STATE_FINISH: loop_finish(); break;
+ case E_STATE_CLEANING: loop_cleaning(); break;
+ default: Serial.println("ERROR. Wrong state!");
+ }
+
 }
 
 /*================================================================================================*/
-
